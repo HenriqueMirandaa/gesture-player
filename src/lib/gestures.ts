@@ -9,20 +9,23 @@ export function classifyGesture(points: Point[]): Gesture | null {
   const tips = [8, 12, 16, 20];
   const folded = tips.map((tip) => distance(points[tip], wrist) < distance(points[tip - 2], wrist));
   const extendedCount = folded.filter((value) => !value).length;
-  const thumb = points[4];
   const index = points[8];
   const middle = points[12];
 
-  if (extendedCount === 0) return "pause";
-  if (extendedCount >= 4 && points[8].y < points[0].y) return "resume";
-  if (!folded[0] && folded.slice(1).every(Boolean)) {
-    if (thumb.x - wrist.x > 0.12) return "next";
-    if (wrist.x - thumb.x > 0.12) return "previous";
+  const thumbExtended = distance(points[4], wrist) > distance(points[3], wrist);
+  if (thumbExtended && folded.every(Boolean)) {
+    const thumbDirection = points[4].x - points[2].x;
+    if (thumbDirection > 0.08) return "previous";
+    if (thumbDirection < -0.08) return "next";
   }
-  const vShape = !folded[1] && !folded[2];
+
+  if (extendedCount === 0) return "pause";
+  if (extendedCount === 4) return "resume";
+
+  const vShape = !folded[0] && !folded[1] && folded[2] && folded[3];
   if (vShape && distance(index, middle) < 0.045) return "mute";
-  if (vShape && distance(index, middle) > 0.08 && index.y < wrist.y - 0.12 && middle.y < wrist.y - 0.12) return "volumeUp";
-  if (vShape && distance(index, middle) > 0.08 && index.y > wrist.y + 0.12 && middle.y > wrist.y + 0.12) return "volumeDown";
+  if (vShape && distance(index, middle) > 0.08 && index.y < wrist.y - 0.1 && middle.y < wrist.y - 0.1) return "volumeUp";
+  if (vShape && distance(index, middle) > 0.08 && index.y > wrist.y + 0.1 && middle.y > wrist.y + 0.1) return "volumeDown";
   return null;
 }
 

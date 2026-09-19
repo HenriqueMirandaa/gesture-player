@@ -49,6 +49,7 @@ export default function Home() {
   } | null>(null);
   const animationRef = useRef<number | null>(null);
   const processFrameRef = useRef<() => void>(() => undefined);
+  const wristTrailRef = useRef<Array<{ x: number; y: number }>>([]);
   const lastGestureRef = useRef<{ gesture: Gesture; at: number } | null>(null);
   const [controlEnabled, setControlEnabled] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
@@ -148,6 +149,13 @@ export default function Home() {
       const context = canvas.getContext("2d");
       context?.clearRect(0, 0, canvas.width, canvas.height);
       if (landmarks && context) {
+        const wrist = { x: landmarks[0].x * canvas.width, y: landmarks[0].y * canvas.height };
+        wristTrailRef.current = [...wristTrailRef.current, wrist].slice(-18);
+        context.strokeStyle = "rgba(255,255,255,.55)";
+        context.lineWidth = 2;
+        context.beginPath();
+        wristTrailRef.current.forEach((point, index) => index === 0 ? context.moveTo(point.x, point.y) : context.lineTo(point.x, point.y));
+        context.stroke();
         const links = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
         context.strokeStyle = "#31d27c";
         context.lineWidth = 3;
@@ -174,6 +182,7 @@ export default function Home() {
       if (gesture) void executeCommand(gesture);
     } else {
       setDetectedGesture("No hand detected");
+      wristTrailRef.current = [];
     }
     animationRef.current = requestAnimationFrame(() => processFrameRef.current());
   }, [executeCommand]);
@@ -195,15 +204,21 @@ export default function Home() {
         const fileset = await vision.FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm",
         );
-        landmarkerRef.current = await vision.HandLandmarker.createFromOptions(fileset, {
-          baseOptions: {
-            modelAssetPath:
-              "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
-            delegate: "GPU",
-          },
-          runningMode: "VIDEO",
-          numHands: 1,
-        });
+        const modelAssetPath =
+          "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+        try {
+          landmarkerRef.current = await vision.HandLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath, delegate: "GPU" },
+            runningMode: "VIDEO",
+            numHands: 1,
+          });
+        } catch {
+          landmarkerRef.current = await vision.HandLandmarker.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath, delegate: "CPU" },
+            runningMode: "VIDEO",
+            numHands: 1,
+          });
+        }
         setCameraReady(true);
         setStatus("Camera active. Show a gesture.");
         animationRef.current = requestAnimationFrame(() => processFrameRef.current());
@@ -218,7 +233,9 @@ export default function Home() {
       stream?.getTracks().forEach((track) => track.stop());
       landmarkerRef.current?.close?.();
       landmarkerRef.current = null;
-      canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+      wristTrailRef.current = [];
+      const canvas = canvasRef.current;
+      if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
       setCameraReady(false);
     };
   }, [controlEnabled, demoMode, processFrame]);
@@ -297,12 +314,18 @@ export default function Home() {
             <div className={styles.cardTitle}><span>NOW PLAYING</span><span className={styles.spotifyDot}>● Spotify</span></div>
             <div className={styles.track}>
               {demoMode ? <div className={styles.albumArt} style={{ background: player.image ?? undefined }}>♫</div> : player.image ? <img className={styles.albumArt} src={player.image} alt="" /> : <div className={styles.albumArt}>♫</div>}
-              <div><h2>{demoMode ? player.lastCommand : player.title}</h2><p>{demoMode ? "Demo track · Gesture Player" : `${player.artist} · ${player.album}`}</p></div>
+              <div><h2>{player.title}</h2><p>{demoMode ? `${player.artist} · ${player.album}` : `${player.artist} · ${player.album}`}</p></div>
             </div>
             <div className={styles.progress}><span style={{ width: `${player.durationMs ? (player.progressMs / player.durationMs) * 100 : 0}%` }} /></div>
             <div className={styles.playerMeta}><span>{formatTime(player.progressMs)} / {formatTime(player.durationMs)}</span><strong>Volume {player.volume}%</strong></div>
             <div className={styles.playback}><span>‹</span><button className={styles.playButton} onClick={() => executeCommand(player.isPlaying ? "pause" : "resume")}>{player.isPlaying ? "Ⅱ" : "▶"}</button><span>›</span></div>
-            <p className={styles.hint}>{loadingPlayer ? "Updating…" : player.isPlaying ? "Playing" : "Paused"} · {demoMode ? "commands are simulated" : player.device}</p>
+            {demoMode && <div className={styles.demoActions}>
+              <button onClick={() => executeCommand("previous")}>Previous</button>
+              <button onClick={() => executeCommand("next")}>Next</button>
+              <button onClick={() => executeCommand("volumeDown")}>Vol −</button>
+              <button onClick={() => executeCommand("volumeUp")}>Vol +</button>
+            </div>}
+            <p className={styles.hint}>{loadingPlayer ? "Updating…" : player.isPlaying ? "Playing" : "Paused"} · {demoMode ? player.lastCommand : player.device}</p>
           </section>
         </div>
 
