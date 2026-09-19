@@ -5,9 +5,10 @@ Gesture Player is a Next.js MVP that controls music with hand gestures. Hand lan
 ## Current MVP
 
 - Demo mode works without a Spotify account.
-- Enable control mode to start gesture recognition.
+- Enable control mode to start gesture recognition in the camera, including in Demo mode.
 - Closed fist pauses, open palm resumes, thumb right/left skips tracks.
 - A V gesture moving up/down changes volume intent; joining the fingers mutes.
+- Demo mode uses fictional tracks and draws a live green hand skeleton over the camera feed.
 - Spotify commands are exposed through a validated server route.
 - Sign in with Spotify to mirror the currently playing track, progress, status, device and volume.
 - Playback continues in the Spotify app/device; this website only reads state and sends commands.

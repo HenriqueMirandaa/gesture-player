@@ -18,15 +18,21 @@ type PlayerState = {
   lastCommand: string;
 };
 
+const demoTracks = [
+  { title: "Neon Horizons", artist: "The Synthetic Skies", album: "Afterglow Protocol", durationMs: 214000, image: "linear-gradient(135deg,#f97316,#7c3aed)" },
+  { title: "Midnight Signals", artist: "Velvet Circuit", album: "Digital Weather", durationMs: 188000, image: "linear-gradient(135deg,#0ea5e9,#172554)" },
+  { title: "Electric Bloom", artist: "Lunar Arcade", album: "Soft Machines", durationMs: 242000, image: "linear-gradient(135deg,#10b981,#164e63)" },
+];
+
 const initialPlayer: PlayerState = {
   isPlaying: false,
   volume: 50,
-  title: "Not connected",
-  artist: "Sign in with Spotify to see your player",
-  album: "",
+  title: "Neon Horizons",
+  artist: "The Synthetic Skies",
+  album: "Afterglow Protocol",
   image: null,
   progressMs: 0,
-  durationMs: 0,
+  durationMs: 214000,
   device: "No active device",
   lastCommand: "Ready for a gesture",
 };
@@ -34,6 +40,7 @@ const initialPlayer: PlayerState = {
 export default function Home() {
   const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const landmarkerRef = useRef<{
     detectForVideo: (video: HTMLVideoElement, timestamp: number) => {
       landmarks?: Array<Array<{ x: number; y: number; z: number }>>;
@@ -51,6 +58,7 @@ export default function Home() {
   const [player, setPlayer] = useState(initialPlayer);
   const [authenticated, setAuthenticated] = useState(false);
   const [loadingPlayer, setLoadingPlayer] = useState(false);
+  const demoTrackIndexRef = useRef(0);
 
   const refreshPlayer = useCallback(async () => {
     if (demoMode) return;
@@ -105,7 +113,11 @@ export default function Home() {
         if (command === "volumeUp") return { ...current, volume: Math.min(100, current.volume + 5), lastCommand: "Volume up" };
         if (command === "volumeDown") return { ...current, volume: Math.max(0, current.volume - 5), lastCommand: "Volume down" };
         if (command === "mute") return { ...current, volume: 0, lastCommand: "Muted" };
-        return { ...current, lastCommand: command === "next" ? "Next track" : "Previous track" };
+        const nextIndex = command === "next"
+          ? (demoTrackIndexRef.current + 1) % demoTracks.length
+          : (demoTrackIndexRef.current - 1 + demoTracks.length) % demoTracks.length;
+        demoTrackIndexRef.current = nextIndex;
+        return { ...current, ...demoTracks[nextIndex], progressMs: 0, lastCommand: command === "next" ? "Next track" : "Previous track" };
       });
       return;
     }
@@ -129,6 +141,33 @@ export default function Home() {
     }
     const result = landmarker.detectForVideo(video, performance.now());
     const landmarks = result.landmarks?.[0];
+    const canvas = canvasRef.current;
+    if (canvas) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext("2d");
+      context?.clearRect(0, 0, canvas.width, canvas.height);
+      if (landmarks && context) {
+        const links = [[0,1],[1,2],[2,3],[3,4],[0,5],[5,6],[6,7],[7,8],[5,9],[9,10],[10,11],[11,12],[9,13],[13,14],[14,15],[15,16],[13,17],[17,18],[18,19],[19,20],[0,17]];
+        context.strokeStyle = "#31d27c";
+        context.lineWidth = 3;
+        context.shadowColor = "#31d27c";
+        context.shadowBlur = 8;
+        for (const [start, end] of links) {
+          context.beginPath();
+          context.moveTo(landmarks[start].x * canvas.width, landmarks[start].y * canvas.height);
+          context.lineTo(landmarks[end].x * canvas.width, landmarks[end].y * canvas.height);
+          context.stroke();
+        }
+        context.shadowBlur = 0;
+        for (const point of landmarks) {
+          context.fillStyle = "#f5fff9";
+          context.beginPath();
+          context.arc(point.x * canvas.width, point.y * canvas.height, 4, 0, Math.PI * 2);
+          context.fill();
+        }
+      }
+    }
     if (landmarks) {
       const gesture = classifyGesture(landmarks);
       setDetectedGesture(gestureLabel(gesture));
@@ -143,7 +182,7 @@ export default function Home() {
   }, [processFrame]);
 
   useEffect(() => {
-    if (!controlEnabled || demoMode) return;
+    if (!controlEnabled) return;
     let stream: MediaStream | undefined;
     let cancelled = false;
     async function startCamera() {
@@ -179,9 +218,23 @@ export default function Home() {
       stream?.getTracks().forEach((track) => track.stop());
       landmarkerRef.current?.close?.();
       landmarkerRef.current = null;
+      canvasRef.current?.getContext("2d")?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
       setCameraReady(false);
     };
   }, [controlEnabled, demoMode, processFrame]);
+
+  useEffect(() => {
+    if (!demoMode || !player.isPlaying) return;
+    const timer = window.setInterval(() => {
+      setPlayer((current) => {
+        const nextProgress = current.progressMs + 1000;
+        return nextProgress >= current.durationMs
+          ? { ...current, progressMs: 0 }
+          : { ...current, progressMs: nextProgress };
+      });
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [demoMode, player.isPlaying]);
 
   const toggleControl = () => {
     setControlEnabled((enabled) => !enabled);
@@ -220,6 +273,7 @@ export default function Home() {
           <section className={styles.cameraCard}>
             <div className={styles.cameraFrame}>
               <video ref={videoRef} muted playsInline className={styles.video} />
+              <canvas ref={canvasRef} className={styles.landmarks} aria-label="Live hand movement recognition overlay" />
               {!cameraReady && <div className={styles.cameraPlaceholder}><span>◎</span><p>{demoMode ? "Demo mode" : "Camera preview"}</p></div>}
               <div className={styles.gesturePill}>{detectedGesture}</div>
             </div>
@@ -228,7 +282,11 @@ export default function Home() {
                 {controlEnabled ? "Turn control off" : "Turn control on"}
               </button>
               <label className={styles.switchLabel}>
-                <input type="checkbox" checked={demoMode} onChange={(event) => setDemoMode(event.target.checked)} />
+                <input type="checkbox" checked={demoMode} onChange={(event) => {
+                  const enabled = event.target.checked;
+                  setDemoMode(enabled);
+                  if (enabled) setPlayer((current) => ({ ...current, ...demoTracks[demoTrackIndexRef.current], image: demoTracks[demoTrackIndexRef.current].image }));
+                }} />
                 <span>Demo mode</span>
               </label>
             </div>
@@ -238,7 +296,7 @@ export default function Home() {
           <section className={styles.playerCard}>
             <div className={styles.cardTitle}><span>NOW PLAYING</span><span className={styles.spotifyDot}>● Spotify</span></div>
             <div className={styles.track}>
-              {player.image ? <img className={styles.albumArt} src={player.image} alt="" /> : <div className={styles.albumArt}>♫</div>}
+              {demoMode ? <div className={styles.albumArt} style={{ background: player.image ?? undefined }}>♫</div> : player.image ? <img className={styles.albumArt} src={player.image} alt="" /> : <div className={styles.albumArt}>♫</div>}
               <div><h2>{demoMode ? player.lastCommand : player.title}</h2><p>{demoMode ? "Demo track · Gesture Player" : `${player.artist} · ${player.album}`}</p></div>
             </div>
             <div className={styles.progress}><span style={{ width: `${player.durationMs ? (player.progressMs / player.durationMs) * 100 : 0}%` }} /></div>
