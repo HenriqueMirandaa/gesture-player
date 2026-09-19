@@ -228,18 +228,43 @@ export default function Home() {
     let stream: MediaStream | undefined;
     let cancelled = false;
     async function startCamera() {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setCameraInfo("Camera API unavailable");
+        setStatus("This browser does not expose camera access. Use Chrome or Edge on HTTPS.");
+        return;
+      }
       try {
-        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera API unavailable");
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false });
-        } catch {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (firstError) {
+          try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          } catch (secondError) {
+            throw secondError instanceof DOMException ? secondError : firstError;
+          }
         }
         if (cancelled || !videoRef.current) return;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
         const videoTrack = stream.getVideoTracks()[0];
         setCameraInfo(videoTrack?.label ? `Camera: ${videoTrack.label}` : "Camera stream active");
+        setCameraReady(true);
+        setStatus("Camera image active. Loading hand recognition...");
+      } catch (error) {
+        const domError = error instanceof DOMException ? error : null;
+        const reason = domError?.name === "NotAllowedError"
+          ? "Camera permission was blocked. Allow camera access in the browser address bar and try again."
+          : domError?.name === "NotFoundError"
+            ? "No camera was found. Connect a webcam or choose a camera in browser settings."
+            : domError?.name === "NotReadableError"
+              ? "Camera is busy in another app or browser tab. Close apps using the camera and try again."
+              : `Camera could not start${domError?.name ? ` (${domError.name})` : ""}.`;
+        setCameraInfo("Camera is unavailable");
+        setStatus(domError?.message ? `${reason} Details: ${domError.message}` : reason);
+        return;
+      }
+
+      try {
         const vision = await import("@mediapipe/tasks-vision");
         const fileset = await vision.FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm",
@@ -278,21 +303,12 @@ export default function Home() {
             setStatus("Camera and hand tracking are active. Face box is unavailable on this browser.");
           }
         }
-        setCameraReady(true);
         if (!faceDetectorRef.current) setStatus("Camera active. Green lines track your hand.");
         else setStatus("Camera active. Blue box checks your face; green lines track your hand.");
         animationRef.current = requestAnimationFrame(() => processFrameRef.current());
       } catch (error) {
-        const domError = error instanceof DOMException ? error : null;
-        const reason = domError?.name === "NotAllowedError"
-          ? "Camera permission was blocked. Allow camera access in the browser address bar and try again."
-          : domError?.name === "NotFoundError"
-            ? "No camera was found. Connect a webcam or choose a camera in browser settings."
-            : domError?.name === "NotReadableError"
-              ? "Camera is busy in another app or browser tab. Close apps using the camera and try again."
-              : `Camera could not start${domError?.name ? ` (${domError.name})` : ""}. Use Chrome/Edge on HTTPS and check camera permissions.`;
-        setCameraInfo("Camera is unavailable");
-        setStatus(domError?.message ? `${reason} Details: ${domError.message}` : reason);
+        const message = error instanceof Error ? error.message : String(error);
+        setStatus(`Camera image is active, but hand recognition could not load. ${message}`);
       }
     }
     void startCamera();
