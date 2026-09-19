@@ -267,7 +267,7 @@ export default function Home() {
       try {
         const vision = await import("@mediapipe/tasks-vision");
         const fileset = await vision.FilesetResolver.forVisionTasks(
-          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm",
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.0.1/wasm",
         );
         const modelAssetPath =
           "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
@@ -307,7 +307,11 @@ export default function Home() {
         else setStatus("Camera active. Blue box checks your face; green lines track your hand.");
         animationRef.current = requestAnimationFrame(() => processFrameRef.current());
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error
+          ? error.message
+          : error && typeof error === "object" && "message" in error
+            ? String(error.message)
+            : "The MediaPipe runtime or hand model could not be downloaded.";
         setStatus(`Camera image is active, but hand recognition could not load. ${message}`);
       }
     }
