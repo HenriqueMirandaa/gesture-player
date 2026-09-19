@@ -47,6 +47,12 @@ export default function Home() {
     };
     close?: () => void;
   } | null>(null);
+  const faceDetectorRef = useRef<{
+    detectForVideo: (video: HTMLVideoElement, timestamp: number) => {
+      detections?: Array<{ boundingBox?: { originX: number; originY: number; width: number; height: number } }>;
+    };
+    close?: () => void;
+  } | null>(null);
   const animationRef = useRef<number | null>(null);
   const processFrameRef = useRef<() => void>(() => undefined);
   const wristTrailRef = useRef<Array<{ x: number; y: number }>>([]);
@@ -56,6 +62,7 @@ export default function Home() {
   const [demoMode, setDemoMode] = useState(true);
   const [status, setStatus] = useState("Demo mode is ready");
   const [detectedGesture, setDetectedGesture] = useState("No gesture");
+  const [faceDetected, setFaceDetected] = useState(false);
   const [player, setPlayer] = useState(initialPlayer);
   const [authenticated, setAuthenticated] = useState(false);
   const [loadingPlayer, setLoadingPlayer] = useState(false);
@@ -141,7 +148,10 @@ export default function Home() {
       return;
     }
     const result = landmarker.detectForVideo(video, performance.now());
+    const faceResult = faceDetectorRef.current?.detectForVideo(video, performance.now());
     const landmarks = result.landmarks?.[0];
+    const face = faceResult?.detections?.[0]?.boundingBox;
+    setFaceDetected(Boolean(face));
     const canvas = canvasRef.current;
     if (canvas) {
       canvas.width = video.videoWidth;
@@ -167,6 +177,19 @@ export default function Home() {
           context.lineTo(landmarks[end].x * canvas.width, landmarks[end].y * canvas.height);
           context.stroke();
         }
+        if (face && context) {
+          context.save();
+          context.strokeStyle = "#57a8ff";
+          context.lineWidth = 4;
+          context.shadowColor = "#57a8ff";
+          context.shadowBlur = 10;
+          context.strokeRect(face.originX, face.originY, face.width, face.height);
+          context.shadowBlur = 0;
+          context.fillStyle = "#57a8ff";
+          context.font = "bold 16px Arial";
+          context.fillText("FACE", face.originX + 8, Math.max(22, face.originY - 10));
+          context.restore();
+        }
         context.shadowBlur = 0;
         for (const point of landmarks) {
           context.fillStyle = "#f5fff9";
@@ -182,6 +205,7 @@ export default function Home() {
       if (gesture) void executeCommand(gesture);
     } else {
       setDetectedGesture("No hand detected");
+      setFaceDetected(false);
       wristTrailRef.current = [];
     }
     animationRef.current = requestAnimationFrame(() => processFrameRef.current());
@@ -219,8 +243,23 @@ export default function Home() {
             numHands: 1,
           });
         }
+        const faceModelAssetPath =
+          "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/1/blaze_face_short_range.tflite";
+        try {
+          faceDetectorRef.current = await vision.FaceDetector.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: faceModelAssetPath, delegate: "GPU" },
+            runningMode: "VIDEO",
+            minDetectionConfidence: 0.5,
+          });
+        } catch {
+          faceDetectorRef.current = await vision.FaceDetector.createFromOptions(fileset, {
+            baseOptions: { modelAssetPath: faceModelAssetPath, delegate: "CPU" },
+            runningMode: "VIDEO",
+            minDetectionConfidence: 0.5,
+          });
+        }
         setCameraReady(true);
-        setStatus("Camera active. Show a gesture.");
+        setStatus("Camera active. Blue box checks your face; green lines track your hand.");
         animationRef.current = requestAnimationFrame(() => processFrameRef.current());
       } catch {
         setStatus("Camera could not start. Check browser permission and HTTPS.");
@@ -233,6 +272,9 @@ export default function Home() {
       stream?.getTracks().forEach((track) => track.stop());
       landmarkerRef.current?.close?.();
       landmarkerRef.current = null;
+      faceDetectorRef.current?.close?.();
+      faceDetectorRef.current = null;
+      setFaceDetected(false);
       wristTrailRef.current = [];
       const canvas = canvasRef.current;
       if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
@@ -292,7 +334,7 @@ export default function Home() {
               <video ref={videoRef} muted playsInline className={styles.video} />
               <canvas ref={canvasRef} className={styles.landmarks} aria-label="Live hand movement recognition overlay" />
               {!cameraReady && <div className={styles.cameraPlaceholder}><span>◎</span><p>{demoMode ? "Demo mode" : "Camera preview"}</p></div>}
-              <div className={styles.gesturePill}>{detectedGesture}</div>
+              <div className={styles.gesturePill}>{faceDetected ? "Face detected · " : "No face · "}{detectedGesture}</div>
             </div>
             <div className={styles.controls}>
               <button className={styles.primaryButton} onClick={toggleControl}>
@@ -308,6 +350,7 @@ export default function Home() {
               </label>
             </div>
             <p className={styles.status}>{status}</p>
+            <p className={styles.cameraHelp}>Blue box = face visible · green skeleton = hand visible · white trail = movement history</p>
           </section>
 
           <section className={styles.playerCard}>
