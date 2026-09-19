@@ -283,13 +283,16 @@ export default function Home() {
         else setStatus("Camera active. Blue box checks your face; green lines track your hand.");
         animationRef.current = requestAnimationFrame(() => processFrameRef.current());
       } catch (error) {
-        const reason = error instanceof DOMException && error.name === "NotAllowedError"
+        const domError = error instanceof DOMException ? error : null;
+        const reason = domError?.name === "NotAllowedError"
           ? "Camera permission was blocked. Allow camera access in the browser address bar and try again."
-          : error instanceof DOMException && error.name === "NotFoundError"
+          : domError?.name === "NotFoundError"
             ? "No camera was found. Connect a webcam or choose a camera in browser settings."
-            : "Camera could not start. Use Chrome/Edge on HTTPS and check camera permissions.";
+            : domError?.name === "NotReadableError"
+              ? "Camera is busy in another app or browser tab. Close apps using the camera and try again."
+              : `Camera could not start${domError?.name ? ` (${domError.name})` : ""}. Use Chrome/Edge on HTTPS and check camera permissions.`;
         setCameraInfo("Camera is unavailable");
-        setStatus(reason);
+        setStatus(domError?.message ? `${reason} Details: ${domError.message}` : reason);
       }
     }
     void startCamera();
