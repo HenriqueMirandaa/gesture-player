@@ -16,6 +16,7 @@
 .controls { display: flex; align-items: center; gap: 18px; margin-top: 18px; }.primaryButton { background: #31d27c; color: #07130c; border: 0; border-radius: 8px; padding: 12px 16px; font-weight: 700; cursor: pointer; }.primaryButton:hover { background: #5de49a; }
 .switchLabel { color: var(--muted); display: flex; align-items: center; gap: 8px; font-size: 13px; }.switchLabel input { accent-color: #31d27c; }.status { color: #6d7783; font-size: 12px; margin-top: 13px; }
 .cameraHelp { color: #566473; font-size: 11px; margin-top: 7px; }
+.cameraInfo { color: #8493a3; font-size: 11px; margin-top: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cardTitle, .playerMeta { color: #788390; font-size: 11px; letter-spacing: .08em; display: flex; justify-content: space-between; }.spotifyDot { color: #31d27c; letter-spacing: 0; }
 .track { display: flex; align-items: center; gap: 15px; margin: 45px 0 38px; }.albumArt { width: 68px; height: 68px; border-radius: 9px; background: linear-gradient(135deg,#d66b45,#542b72); display: grid; place-items: center; font-size: 30px; }.track h2 { font-size: 20px; margin-bottom: 7px; }.track p, .hint { color: var(--muted); font-size: 13px; }
 .progress { background: #29313b; height: 4px; border-radius: 8px; margin-bottom: 11px; }.progress span { background: #31d27c; display: block; height: 100%; border-radius: inherit; }

@@ -63,6 +63,7 @@ export default function Home() {
   const [status, setStatus] = useState("Demo mode is ready");
   const [detectedGesture, setDetectedGesture] = useState("No gesture");
   const [faceDetected, setFaceDetected] = useState(false);
+  const [cameraInfo, setCameraInfo] = useState("Camera is off");
   const [player, setPlayer] = useState(initialPlayer);
   const [authenticated, setAuthenticated] = useState(false);
   const [loadingPlayer, setLoadingPlayer] = useState(false);
@@ -147,8 +148,16 @@ export default function Home() {
       animationRef.current = requestAnimationFrame(() => processFrameRef.current());
       return;
     }
-    const result = landmarker.detectForVideo(video, performance.now());
-    const faceResult = faceDetectorRef.current?.detectForVideo(video, performance.now());
+    let result: { landmarks?: Array<Array<{ x: number; y: number; z: number }>> } = {};
+    let faceResult: { detections?: Array<{ boundingBox?: { originX: number; originY: number; width: number; height: number } }> } | undefined;
+    try {
+      result = landmarker.detectForVideo(video, performance.now());
+      faceResult = faceDetectorRef.current?.detectForVideo(video, performance.now());
+    } catch {
+      setStatus("Vision model is warming up. Keep the camera on for a moment.");
+      animationRef.current = requestAnimationFrame(() => processFrameRef.current());
+      return;
+    }
     const landmarks = result.landmarks?.[0];
     const face = faceResult?.detections?.[0]?.boundingBox;
     setFaceDetected(Boolean(face));
@@ -220,10 +229,17 @@ export default function Home() {
     let cancelled = false;
     async function startCamera() {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+        if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera API unavailable");
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: "user" }, audio: false });
+        } catch {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        }
         if (cancelled || !videoRef.current) return;
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
+        const videoTrack = stream.getVideoTracks()[0];
+        setCameraInfo(videoTrack?.label ? `Camera: ${videoTrack.label}` : "Camera stream active");
         const vision = await import("@mediapipe/tasks-vision");
         const fileset = await vision.FilesetResolver.forVisionTasks(
           "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.22/wasm",
@@ -252,17 +268,28 @@ export default function Home() {
             minDetectionConfidence: 0.5,
           });
         } catch {
-          faceDetectorRef.current = await vision.FaceDetector.createFromOptions(fileset, {
-            baseOptions: { modelAssetPath: faceModelAssetPath, delegate: "CPU" },
-            runningMode: "VIDEO",
-            minDetectionConfidence: 0.5,
-          });
+          try {
+            faceDetectorRef.current = await vision.FaceDetector.createFromOptions(fileset, {
+              baseOptions: { modelAssetPath: faceModelAssetPath, delegate: "CPU" },
+              runningMode: "VIDEO",
+              minDetectionConfidence: 0.5,
+            });
+          } catch {
+            setStatus("Camera and hand tracking are active. Face box is unavailable on this browser.");
+          }
         }
         setCameraReady(true);
-        setStatus("Camera active. Blue box checks your face; green lines track your hand.");
+        if (!faceDetectorRef.current) setStatus("Camera active. Green lines track your hand.");
+        else setStatus("Camera active. Blue box checks your face; green lines track your hand.");
         animationRef.current = requestAnimationFrame(() => processFrameRef.current());
-      } catch {
-        setStatus("Camera could not start. Check browser permission and HTTPS.");
+      } catch (error) {
+        const reason = error instanceof DOMException && error.name === "NotAllowedError"
+          ? "Camera permission was blocked. Allow camera access in the browser address bar and try again."
+          : error instanceof DOMException && error.name === "NotFoundError"
+            ? "No camera was found. Connect a webcam or choose a camera in browser settings."
+            : "Camera could not start. Use Chrome/Edge on HTTPS and check camera permissions.";
+        setCameraInfo("Camera is unavailable");
+        setStatus(reason);
       }
     }
     void startCamera();
@@ -279,6 +306,7 @@ export default function Home() {
       const canvas = canvasRef.current;
       if (canvas) canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
       setCameraReady(false);
+      setCameraInfo("Camera is off");
     };
   }, [controlEnabled, demoMode, processFrame]);
 
@@ -350,6 +378,7 @@ export default function Home() {
               </label>
             </div>
             <p className={styles.status}>{status}</p>
+            <p className={styles.cameraInfo}>{cameraInfo}</p>
             <p className={styles.cameraHelp}>Blue box = face visible · green skeleton = hand visible · white trail = movement history</p>
           </section>
 
