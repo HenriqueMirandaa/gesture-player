@@ -12,14 +12,14 @@ export function classifyGesture(points: Point[]): Gesture | null {
   const index = points[8];
   const middle = points[12];
 
-  const thumbExtended = distance(points[4], wrist) > distance(points[3], wrist);
-  if (thumbExtended && folded.every(Boolean)) {
-    const thumbDirection = points[4].x - points[2].x;
-    if (thumbDirection > 0.08) return "previous";
-    if (thumbDirection < -0.08) return "next";
+  const thumbVector = { x: points[4].x - points[2].x, y: points[4].y - points[2].y };
+  const thumbExtended = distance(points[4], wrist) > distance(points[3], wrist) * 1.08;
+  if (thumbExtended && folded.every(Boolean) && Math.abs(thumbVector.x) > Math.abs(thumbVector.y) * 1.15) {
+    if (thumbVector.x > 0.06) return "previous";
+    if (thumbVector.x < -0.06) return "next";
   }
 
-  if (extendedCount === 0) return "pause";
+  if (extendedCount === 0 && !thumbExtended) return "pause";
   if (extendedCount === 4) return "resume";
 
   const vShape = !folded[0] && !folded[1] && folded[2] && folded[3];
