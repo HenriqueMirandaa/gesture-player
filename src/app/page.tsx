@@ -406,8 +406,8 @@ export default function Home() {
 
   return (
     <main className={styles.page}>
-      <div className={styles.cursorHalo} />
       <section className={styles.shell}>
+        <div className={styles.cursorHalo} />
         <header className={styles.header}>
           <div>
             <p className={styles.eyebrow}>GESTURE PLAYER <span>/ LIVE SESSION</span></p>
