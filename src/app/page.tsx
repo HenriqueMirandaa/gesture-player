@@ -62,6 +62,50 @@ export default function Home() {
   const [authenticated, setAuthenticated] = useState(false);
   const [loadingPlayer, setLoadingPlayer] = useState(false);
   const demoTrackIndexRef = useRef(0);
+  const [onboardingComplete, setOnboardingComplete] = useState(false);
+  const [cameraTested, setCameraTested] = useState(false);
+  const [cameraTestStatus, setCameraTestStatus] = useState("Camera test not run");
+
+  useEffect(() => {
+    let frame = 0;
+    let targetX = 0;
+    let targetY = 0;
+    let currentX = 0;
+    let currentY = 0;
+    const move = (event: PointerEvent) => {
+      targetX = event.clientX;
+      targetY = event.clientY;
+      if (frame) return;
+      frame = requestAnimationFrame(() => {
+        currentX += (targetX - currentX) * 0.18;
+        currentY += (targetY - currentY) * 0.18;
+        document.documentElement.style.setProperty("--cursor-x", `${currentX}px`);
+        document.documentElement.style.setProperty("--cursor-y", `${currentY}px`);
+        frame = 0;
+        if (Math.abs(targetX - currentX) > 1 || Math.abs(targetY - currentY) > 1) move(event);
+      });
+    };
+    window.addEventListener("pointermove", move);
+    return () => {
+      window.removeEventListener("pointermove", move);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, []);
+
+  const testCamera = async () => {
+    setCameraTestStatus("Requesting camera access…");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      const track = stream.getVideoTracks()[0];
+      setCameraTested(true);
+      setCameraTestStatus(track?.label ? `Ready · ${track.label}` : "Camera ready");
+      stream.getTracks().forEach((item) => item.stop());
+    } catch (error) {
+      setCameraTestStatus(error instanceof DOMException && error.name === "NotAllowedError"
+        ? "Permission blocked. Allow camera access and try again."
+        : "Camera unavailable. Check that no other app is using it.");
+    }
+  };
 
   const refreshPlayer = useCallback(async () => {
     if (demoMode) return;
@@ -323,14 +367,52 @@ export default function Home() {
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
   };
 
+  if (!onboardingComplete) {
+    return (
+      <main className={styles.onboardingPage}>
+        <div className={styles.cursorHalo} />
+        <section className={styles.onboarding}>
+          <div className={styles.onboardingKicker}>GESTURE PLAYER / 01</div>
+          <div className={styles.onboardingRule} />
+          <h1 className={styles.onboardingTitle}>A quieter way<br />to control sound.</h1>
+          <p className={styles.onboardingIntro}>Use simple hand movements to direct your music. The camera stays in your browser; no video is recorded or uploaded.</p>
+          <div className={styles.onboardingGrid}>
+            <div>
+              <p className={styles.sectionLabel}>GESTURES</p>
+              <div className={styles.gestureList}>
+                <div><b>01</b><span>Open palm</span><em>resume</em></div>
+                <div><b>02</b><span>Closed fist</span><em>pause</em></div>
+                <div><b>03</b><span>Thumb direction</span><em>previous / next</em></div>
+                <div><b>04</b><span>V movement</span><em>volume</em></div>
+              </div>
+            </div>
+            <div className={styles.cameraCheck}>
+              <p className={styles.sectionLabel}>CAMERA CHECK</p>
+              <div className={`${styles.checkPanel} ${cameraTested ? styles.checkReady : ""}`}>
+                <span className={styles.checkMark}>{cameraTested ? "✓" : "○"}</span>
+                <p>{cameraTestStatus}</p>
+              </div>
+              <button className={styles.textButton} onClick={testCamera}>Test camera <span>↗</span></button>
+            </div>
+          </div>
+          <div className={styles.onboardingFooter}>
+            <span>Local processing · No account required for Demo</span>
+            <button className={styles.startButton} onClick={() => { setOnboardingComplete(true); setControlEnabled(true); }}>Start session <span>→</span></button>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className={styles.page}>
+      <div className={styles.cursorHalo} />
       <section className={styles.shell}>
         <header className={styles.header}>
           <div>
-            <p className={styles.eyebrow}>GESTURE PLAYER</p>
-            <h1 className={styles.title}>Control music with your hands.</h1>
-            <p className={styles.subtitle}>A privacy-first Spotify controller powered by your camera.</p>
+            <p className={styles.eyebrow}>GESTURE PLAYER <span>/ LIVE SESSION</span></p>
+            <h1 className={styles.title}>Direct the room.</h1>
+            <p className={styles.subtitle}>Hands become the interface.</p>
           </div>
           <span className={`${styles.badge} ${controlEnabled ? styles.badgeOn : ""}`}>
             {controlEnabled ? "CONTROL ON" : "CONTROL OFF"}
@@ -363,7 +445,7 @@ export default function Home() {
             </div>
             <p className={styles.status}>{status}</p>
             <p className={styles.cameraInfo}>{cameraInfo}</p>
-            <p className={styles.cameraHelp}>Green skeleton = hand landmarks · white trail = recent movement</p>
+            <p className={styles.cameraHelp}>Green skeleton · white trail · local processing</p>
           </section>
 
           <section className={styles.playerCard}>
