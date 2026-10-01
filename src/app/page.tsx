@@ -119,7 +119,16 @@ export default function Home() {
       };
       setAuthenticated(Boolean(data.authenticated));
       if (data.playing) setPlayer((current) => ({ ...current, ...data.playing }));
-      if (data.error) setStatus(data.error);
+      if (response.status === 401) {
+        setAuthenticated(false);
+        setStatus("Spotify session expired. Sign in again.");
+      } else if (response.status === 403) {
+        setStatus(data.error ?? "Spotify playback requires a Premium account.");
+      } else if (response.status === 429) {
+        setStatus(data.error ?? "Spotify rate limit reached. Retrying shortly.");
+      } else if (data.error) {
+        setStatus(data.error);
+      }
       if (!data.authenticated) setStatus("Sign in with Spotify to control your player.");
     } catch {
       setStatus("Could not read Spotify player state.");
@@ -130,7 +139,9 @@ export default function Home() {
 
   useEffect(() => {
     const initialRefresh = window.setTimeout(() => void refreshPlayer(), 0);
-    const interval = demoMode ? undefined : window.setInterval(() => void refreshPlayer(), 3000);
+    const interval = demoMode ? undefined : window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshPlayer();
+    }, 3000);
     return () => {
       window.clearTimeout(initialRefresh);
       if (interval) window.clearInterval(interval);

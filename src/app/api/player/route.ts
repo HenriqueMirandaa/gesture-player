@@ -10,6 +10,9 @@ export async function GET() {
     cache: "no-store",
   });
   if (response.status === 204) return NextResponse.json({ authenticated: true, playing: null });
+  if (response.status === 401) return NextResponse.json({ authenticated: false, error: "Spotify session expired" }, { status: 401 });
+  if (response.status === 403) return NextResponse.json({ authenticated: true, error: "Spotify playback requires a Premium account" }, { status: 403 });
+  if (response.status === 429) return NextResponse.json({ authenticated: true, error: "Spotify rate limit reached. Retrying shortly." }, { status: 429 });
   if (!response.ok) return NextResponse.json({ error: "Spotify player state unavailable" }, { status: response.status });
 
   const state = (await response.json()) as {

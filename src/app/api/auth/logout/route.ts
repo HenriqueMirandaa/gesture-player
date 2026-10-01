@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import { clearSpotifySession } from "@/lib/spotify-auth";
 
 export async function POST() {
-  const store = await cookies();
-  for (const name of ["spotify_access_token", "spotify_refresh_token", "spotify_oauth_state", "spotify_pkce_verifier"]) {
-    store.delete(name);
-  }
+  await clearSpotifySession();
   return NextResponse.json({ ok: true });
 }

@@ -20,10 +20,27 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` in Chrome or Edge. Camera access requires localhost or HTTPS.
+### Connect a Spotify account locally
 
-Copy `.env.example` to `.env.local`. Demo mode is enabled by default. Add your Spotify app credentials and set `DEMO_MODE=false` to use the integration. Register `http://localhost:3000/api/auth/spotify/callback` as a Redirect URI in the Spotify Developer Dashboard.
+1. Create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard), then open its settings.
+2. Add this exact Redirect URI: `http://127.0.0.1:3000/api/auth/spotify/callback`. Spotify requires `127.0.0.1` rather than `localhost`.
+3. In the Spotify app's Users Management settings, allowlist the Spotify account you will use for testing.
+4. Copy `.env.example` to `.env.local` and set `SPOTIFY_CLIENT_ID` to the app's Client ID. Keep `DEMO_MODE=false` and `SPOTIFY_REDIRECT_URI=http://127.0.0.1:3000/api/auth/spotify/callback`.
+5. Generate a 32-byte encryption key in PowerShell:
 
-## Deploy
+   ```powershell
+   $bytes = New-Object byte[] 32
+   $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+   $rng.GetBytes($bytes)
+   [Convert]::ToBase64String($bytes)
+   $rng.Dispose()
+   ```
 
-Import the repository into Vercel, add the environment variables, and use the production callback URL in the Spotify Developer Dashboard. Camera inference stays client-side so the application fits serverless hosting.
+   Put the printed value in `.env.local` as `SPOTIFY_TOKEN_ENCRYPTION_KEY`. Do not share or commit `.env.local`. Leave `SPOTIFY_CLIENT_SECRET` empty; the login uses PKCE and does not need it.
+
+6. Run `npm install`, then `npm run dev`, and open `http://127.0.0.1:3000`.
+7. Turn off the **Demo mode** switch and click **Sign in with Spotify**. Approve access. Start playback on an active Spotify device to see the track update in the app.
+
+Spotify Development Mode permits up to five allowlisted users and requires the app owner to have Spotify Premium. Playback commands also require Premium and an active device. This local setup stores the encrypted tokens in an HTTP-only cookie; it needs no database or hosted service.
+
+The player polls Spotify every three seconds while the tab is visible. Camera inference remains local in the browser; camera frames and hand landmarks are not uploaded.
