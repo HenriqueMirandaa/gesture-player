@@ -44,3 +44,7 @@ npm run dev
 Spotify Development Mode permits up to five allowlisted users and requires the app owner to have Spotify Premium. Playback commands also require Premium and an active device. This local setup stores the encrypted tokens in an HTTP-only cookie; it needs no database or hosted service.
 
 The player polls Spotify every three seconds while the tab is visible. Camera inference remains local in the browser; camera frames and hand landmarks are not uploaded.
+
+## SEO and sharing
+
+The app includes SEO/social metadata, browser and Apple icons, a generated Open Graph/Twitter share card, `robots.txt`, and `sitemap.xml`. On Vercel, the production domain is detected automatically. For a custom domain, set `NEXT_PUBLIC_SITE_URL` to its full HTTPS origin, for example `https://gesture-player.example.com`. Vercel preview deployments are marked `noindex`.

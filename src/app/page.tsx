@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import styles from "./page.module.css";
 import { Gesture, classifyGesture, gestureLabel } from "@/lib/gestures";
 
@@ -38,7 +37,6 @@ const initialPlayer: PlayerState = {
 };
 
 export default function Home() {
-  const router = useRouter();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const landmarkerRef = useRef<{
@@ -67,23 +65,47 @@ export default function Home() {
   const [cameraTestStatus, setCameraTestStatus] = useState("Camera test not run");
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("spotify") !== "connected") return;
+    url.searchParams.delete("spotify");
+    window.history.replaceState(null, "", url);
+    const timeout = window.setTimeout(() => {
+      setOnboardingComplete(true);
+      setDemoMode(false);
+    }, 0);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  useEffect(() => {
     let frame = 0;
-    let targetX = 0;
-    let targetY = 0;
-    let currentX = 0;
-    let currentY = 0;
-    const move = (event: PointerEvent) => {
-      targetX = event.clientX;
-      targetY = event.clientY;
-      if (frame) return;
-      frame = requestAnimationFrame(() => {
-        currentX += (targetX - currentX) * 0.18;
-        currentY += (targetY - currentY) * 0.18;
-        document.documentElement.style.setProperty("--cursor-x", `${currentX}px`);
-        document.documentElement.style.setProperty("--cursor-y", `${currentY}px`);
+    let target: { x: number; y: number } | null = null;
+    let current: { x: number; y: number } | null = null;
+    let previousTime = 0;
+    const animate = (time: number) => {
+      if (!target) {
         frame = 0;
-        if (Math.abs(targetX - currentX) > 1 || Math.abs(targetY - currentY) > 1) move(event);
-      });
+        return;
+      }
+      current ??= target;
+      const smoothing = 1 - Math.exp(-(time - previousTime) / 70);
+      previousTime = time;
+      current.x += (target.x - current.x) * smoothing;
+      current.y += (target.y - current.y) * smoothing;
+      document.documentElement.style.setProperty("--cursor-x", `${current.x}px`);
+      document.documentElement.style.setProperty("--cursor-y", `${current.y}px`);
+      if (Math.abs(target.x - current.x) > 0.1 || Math.abs(target.y - current.y) > 0.1) {
+        frame = requestAnimationFrame(animate);
+      } else {
+        current = target;
+        frame = 0;
+      }
+    };
+    const move = (event: PointerEvent) => {
+      target = { x: event.clientX, y: event.clientY };
+      if (!frame) {
+        previousTime = performance.now();
+        frame = requestAnimationFrame(animate);
+      }
     };
     window.addEventListener("pointermove", move);
     return () => {
@@ -118,7 +140,21 @@ export default function Home() {
         playing?: Omit<PlayerState, "lastCommand"> | null;
       };
       setAuthenticated(Boolean(data.authenticated));
-      if (data.playing) setPlayer((current) => ({ ...current, ...data.playing }));
+      if (data.playing) {
+        setPlayer((current) => ({ ...current, ...data.playing }));
+      } else if (data.authenticated) {
+        setPlayer((current) => ({
+          ...current,
+          isPlaying: false,
+          title: "Nothing playing",
+          artist: "No active track",
+          album: "",
+          image: null,
+          progressMs: 0,
+          durationMs: 0,
+          device: "No active device",
+        }));
+      }
       if (response.status === 401) {
         setAuthenticated(false);
         setStatus("Spotify session expired. Sign in again.");
@@ -367,7 +403,7 @@ export default function Home() {
     setStatus(controlEnabled ? "Control mode disabled" : demoMode ? "Demo control mode enabled" : "Starting camera...");
   };
 
-  const login = () => { router.push("/api/auth/spotify/start"); };
+  const login = () => { window.location.assign(new URL("/api/auth/spotify/start", window.location.origin).toString()); };
   const logout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     setAuthenticated(false);
